@@ -1,0 +1,200 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  RESIDENT
+  ADMIN
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ComplaintCategory {
+  PLUMBING
+  ELECTRICAL
+  SECURITY
+  CLEANING
+  PARKING
+  ELEVATOR
+  AMENITIES
+  OTHER
+}
+
+model User {
+  id            String             @id @default(cuid())
+  name          String
+  email         String             @unique
+  emailVerified Boolean            @default(false)
+  image         String?
+  passwordHash  String?
+  role          Role               @default(RESIDENT)
+  flatNumber    String?
+  phone         String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  complaints    Complaint[]        @relation("ResidentComplaints")
+  actions       ComplaintHistory[] @relation("ActorHistory")
+  ratings       Rating[]
+  sessions      Session[]
+  accounts      Account[]
+  followed      ComplaintFollower[]
+
+  @@index([role])
+  @@index([flatNumber])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+}
+
+model Complaint {
+  id          String             @id @default(cuid())
+  title       String
+  description String
+  category    ComplaintCategory
+  priority    Priority
+  status      ComplaintStatus    @default(OPEN)
+  location    String?
+  dueAt       DateTime?
+  residentId  String
+  resident    User               @relation("ResidentComplaints", fields: [residentId], references: [id], onDelete: Cascade)
+  attachments Attachment[]
+  history     ComplaintHistory[]
+  rating      Rating?
+  followers   ComplaintFollower[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([residentId, createdAt])
+  @@index([status, priority])
+  @@index([category])
+  @@index([dueAt])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ComplaintHistory {
+  id          String          @id @default(cuid())
+  complaintId String
+  complaint   Complaint      @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  actorId     String
+  actor       User            @relation("ActorHistory", fields: [actorId], references: [id], onDelete: Restrict)
+  fromStatus  ComplaintStatus?
+  toStatus    ComplaintStatus
+  note        String?
+  createdAt   DateTime        @default(now())
+
+  @@index([complaintId, createdAt])
+  @@index([actorId])
+}
+
+model Attachment {
+  id          String    @id @default(cuid())
+  complaintId String
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  url         String
+  publicId    String
+  fileName    String
+  createdAt   DateTime  @default(now())
+
+  @@index([complaintId])
+}
+
+model Rating {
+  id          String    @id @default(cuid())
+  complaintId String    @unique
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  residentId  String
+  resident    User      @relation(fields: [residentId], references: [id], onDelete: Cascade)
+  score       Int
+  comment     String?
+  createdAt   DateTime  @default(now())
+
+  @@index([residentId])
+}
+
+model Notice {
+  id        String   @id @default(cuid())
+  title     String
+  body      String
+  pinned    Boolean  @default(false)
+  important Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pinned, createdAt])
+}
+
+model ComplaintFollower {
+  id          String    @id @default(cuid())
+  complaintId String
+  complaint   Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([complaintId, userId])
+  @@index([userId])
+}
